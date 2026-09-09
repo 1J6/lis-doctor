@@ -135,6 +135,7 @@ export function renderTable(vm) {
     if (vm.connected) dot = `<span class="dot ${vm.connected[seat] ? 'on' : 'off'}" title="${vm.connected[seat] ? 'connected' : 'not connected'}"></span>`;
     const timer = vm.timerText && isActive && seat !== mySeat ? `<span class="timer">${vm.timerText}</span>` : '';
     let html = `<div class="name">${auction.Dealer === seat ? '<span class="dealer-badge" title="Dealer">D</span>' : ''}${dot}${nm(seat)}${timer}</div>`;
+    if (vm.speech && vm.speech[seat]) html += `<div class="speech">${escapeHtml(vm.speech[seat])}</div>`;
     if (seat !== mySeat) {
       const n = vm.handCounts[seat];
       html += `<div class="backs" aria-label="${n} cards">${'<span class="mini-back"></span>'.repeat(n)}</div>`;

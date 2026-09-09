@@ -42,6 +42,86 @@ const ui = {
   busy: false, noticeId: null, takeoverTimer: null, tick: null, pendingName: null, intent: null,
 };
 
+// ---------------------------------------------------------------- chat
+
+const QUICK = ['\u{1F44D}', '\u{1F602}', '\u{1F631}', 'Nice!', 'Ugh', 'Hurry up \u{1F642}', 'Sorry partner', 'gg'];
+const C = { msgs: [], open: false, seen: 0, unsub: null, speech: [null, null, null, null], speechTimers: [null, null, null, null], lastId: null, ready: false };
+
+function chatStart() {
+  chatStop();
+  C.ready = false;
+  C.unsub = S.ref.subscribeChat(onChat);
+  $('chatBtn').hidden = false;
+  $('chatQuick').innerHTML = QUICK.map((q) => `<button type="button" data-q="${escapeHtml(q)}">${escapeHtml(q)}</button>`).join('');
+  $('chatBtn').onclick = () => chatOpen(!C.open);
+  $('chatClose').onclick = () => chatOpen(false);
+  $('chatQuick').onclick = (e) => { const b = e.target.closest('[data-q]'); if (b) chatSend(b.dataset.q); };
+  $('chatForm').onsubmit = (e) => { e.preventDefault(); const inp = $('chatInput'); const t = inp.value.trim(); if (t) { chatSend(t); inp.value = ''; } };
+}
+
+function chatStop() {
+  if (C.unsub) C.unsub();
+  C.unsub = null; C.msgs = []; C.seen = 0; C.lastId = null; C.ready = false;
+  C.speech = [null, null, null, null];
+  C.speechTimers.forEach((t) => clearTimeout(t));
+  chatOpen(false);
+  $('chatBtn').hidden = true;
+  $('chatBadge').hidden = true;
+}
+
+function chatOpen(open) {
+  C.open = open;
+  $('chat').hidden = !open;
+  if (open) { C.seen = C.msgs.length; renderChat(); setTimeout(() => { const l = $('chatList'); l.scrollTop = l.scrollHeight; }, 0); }
+  chatBadge();
+}
+
+function chatBadge() {
+  const n = Math.max(0, C.msgs.length - C.seen);
+  const b = $('chatBadge');
+  b.hidden = C.open || n === 0;
+  b.textContent = n > 9 ? '9+' : String(n);
+}
+
+async function chatSend(text) {
+  const room = S && S.room;
+  const my = me(room);
+  if (!room || !my) return;
+  await S.ref.pushChat({ pid: S.pid, name: my.name, text: String(text).slice(0, 200), t: now() });
+}
+
+function onChat(msgs) {
+  const prevLast = C.lastId;
+  C.msgs = msgs;
+  const last = msgs.length ? msgs[msgs.length - 1] : null;
+  C.lastId = last ? last.id : null;
+  // speech bubble by the sender's seat for a fresh message (not on first load)
+  if (C.ready && last && last.id !== prevLast && S.room && S.room.status === 'playing') {
+    const p = S.room.players[last.pid];
+    if (p && p.seat !== undefined && p.seat !== null) {
+      clearTimeout(C.speechTimers[p.seat]);
+      C.speech[p.seat] = last.text;
+      C.speechTimers[p.seat] = setTimeout(() => { C.speech[p.seat] = null; if (S && S.room && S.room.status === 'playing') renderAll(); }, 4000);
+      renderAll();
+    }
+  }
+  if (!C.ready) { C.ready = true; C.seen = msgs.length; }
+  if (C.open) { C.seen = msgs.length; renderChat(); }
+  chatBadge();
+  if (S.room && S.room.status === 'lobby' && !C.open) renderLobby(S.room);
+  // the host trims very old messages
+  if (isHost(S.room) && msgs.length > 70) msgs.slice(0, msgs.length - 60).forEach((m) => S.ref.removeChat(m.id));
+}
+
+function renderChat() {
+  const list = $('chatList');
+  const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
+  list.innerHTML = C.msgs.length
+    ? C.msgs.map((m) => `<div class="msg ${m.pid === S.pid ? 'mine' : ''}">${m.pid === S.pid ? '' : `<span class="who">${escapeHtml(m.name || '?')}</span>`}${escapeHtml(m.text)}</div>`).join('')
+    : '<div class="empty">No messages yet. Say hi!</div>';
+  if (atBottom) list.scrollTop = list.scrollHeight;
+}
+
 const parseBlob = (room) => (room && room.blob ? JSON.parse(room.blob) : null);
 const players = (room) => Object.entries((room && room.players) || {}).map(([id, p]) => ({ id, ...p }));
 const me = (room) => (room && room.players && room.players[S.pid]) || null;
@@ -208,10 +288,12 @@ async function attach(code) {
   store(ROOM_KEY, { code, pid: S.pid });
   S.stopPresence = S.ref.presence(S.pid);
   S.unsub = S.ref.subscribe(onRoom);
+  chatStart();
 }
 
 function detach() {
   if (!S) return;
+  chatStop();
   if (S.unsub) S.unsub();
   if (S.stopPresence) S.stopPresence();
   S.unsub = null; S.stopPresence = null; S.ref = null; S.code = null; S.room = null;
@@ -359,6 +441,7 @@ function renderLobby(room) {
     (host ? `<button type="button" class="btn secondary" data-action="random" ${ps.length < 2 ? 'disabled' : ''}>Randomize teams</button>` : '') +
     (host ? `<button type="button" class="btn big" data-action="start" ${ready ? '' : 'disabled'}>${ready ? 'Start game' : ps.length < 4 ? `Waiting for ${4 - ps.length} more player${ps.length === 3 ? '' : 's'}…` : 'Teams must be 2 and 2'}</button>`
           : `<p class="sub center">${ready ? `Waiting for ${escapeHtml((ps.find((p) => p.id === room.hostId) || {}).name || 'the host')} to start…` : 'Waiting for everyone to join and pick teams…'}</p>`) +
+    `<button type="button" class="btn secondary" data-action="chat">Chat${C.msgs.length > C.seen ? ` (${C.msgs.length - C.seen} new)` : ''}</button>` +
     `<button type="button" class="btn danger" data-action="leave">Leave room</button>` +
     `</div>` + rulesBlurb()));
   bindScreen({
@@ -380,6 +463,7 @@ function renderLobby(room) {
       return r;
     }),
     start: () => startGame(),
+    chat: () => chatOpen(true),
     leave: () => { if (confirm('Leave this room?')) leaveRoom(); },
   });
 }
@@ -489,7 +573,7 @@ function renderAll() {
     names, connected, teamNames: teamShort, teamShort, score: game.Score,
     gamesWon: room.stats.total.games, sets: room.stats.total.sets,
     showTrick: ui.showTrick, trickWinner: ui.trickWinner, awaiting, hint: null, timerText, busy: ui.busy,
-    prompt: room.paused ? 'Paused' : null,
+    prompt: room.paused ? 'Paused' : null, speech: C.speech,
   });
 
   // sheets

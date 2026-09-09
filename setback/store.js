@@ -55,6 +55,17 @@ async function firebaseStore(cfg) {
           return () => { document.removeEventListener('visibilitychange', again); c.onDisconnect().cancel(); c.set(false); };
         },
         async get() { return (await ref.get()).val(); },
+        // chat lives beside the game state so messages never contend with moves
+        subscribeChat(cb) {
+          const q = ref.child('chat').limitToLast(80);
+          const h = q.on('value', (s) => {
+            const v = s.val() || {};
+            cb(Object.entries(v).map(([id, m]) => ({ id, ...m })).sort((a, b) => a.t - b.t));
+          });
+          return () => q.off('value', h);
+        },
+        pushChat(msg) { return ref.child('chat').push(msg); },
+        removeChat(id) { return ref.child('chat/' + id).remove(); },
       };
     },
   };
@@ -90,6 +101,29 @@ function localStore() {
         },
         presence() { return () => {}; },
         async get() { return read(code); },
+        subscribeChat(cb) {
+          const ck = key(code) + '-chat';
+          const readChat = () => { try { return JSON.parse(localStorage.getItem(ck) || '[]'); } catch { return []; } };
+          const onMsg = (e) => { if (e.data && e.data.code === code && e.data.chat) cb(readChat()); };
+          const onStorage = (e) => { if (e.key === ck) cb(readChat()); };
+          chan.addEventListener('message', onMsg);
+          window.addEventListener('storage', onStorage);
+          setTimeout(() => cb(readChat()), 0);
+          return () => { chan.removeEventListener('message', onMsg); window.removeEventListener('storage', onStorage); };
+        },
+        async pushChat(msg) {
+          const ck = key(code) + '-chat';
+          let list = []; try { list = JSON.parse(localStorage.getItem(ck) || '[]'); } catch { list = []; }
+          list.push({ id: 'm' + Date.now() + Math.random().toString(36).slice(2, 6), ...msg });
+          localStorage.setItem(ck, JSON.stringify(list.slice(-80)));
+          chan.postMessage({ code, chat: true });
+          window.dispatchEvent(new StorageEvent('storage', { key: ck }));
+        },
+        async removeChat(id) {
+          const ck = key(code) + '-chat';
+          let list = []; try { list = JSON.parse(localStorage.getItem(ck) || '[]'); } catch { list = []; }
+          localStorage.setItem(ck, JSON.stringify(list.filter((m) => m.id !== id)));
+        },
       };
     },
   };
