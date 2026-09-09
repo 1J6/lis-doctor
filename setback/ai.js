@@ -14,6 +14,7 @@ import {
   seatIncr, partnerOf, teamOfSeat, otherTeam, Score,
   Auction, Trick, Playout, ClosedDeal, OpenDeal,
 } from './engine.js';
+import { judgeScore } from './rules.js';
 
 // ------------------------------------------------------------------ helpers
 
@@ -241,11 +242,14 @@ function rolloutDeal(deal) {
   return ClosedDeal.getDealScore(d.ClosedDeal);
 }
 
-/// Utility of a deal outcome for `team`, given the game score before the deal.
-function utility(dealScore, gameScore, team) {
+/// Utility of a deal outcome for `team`, given the game score before the deal
+/// and which team held the contract (house rules: bid out at 11, 15 any way,
+/// lose at -6).
+function utility(dealScore, gameScore, team, bidderTeam) {
   const opp = otherTeam(team);
   const after = Score.add(gameScore, dealScore);
-  const winner = Score.tryGetWinningTeam(after);
+  const made = dealScore[bidderTeam] > 0;
+  const { winner } = judgeScore(after, bidderTeam, made);
   let u = dealScore[team] - dealScore[opp];
   if (winner === team) u += 8;
   else if (winner === opp) u -= 8;
@@ -305,7 +309,7 @@ export function chooseBid(infoSet, rng, numWorlds = 64) {
       if (raw === null) adj = [0, 0], adj[team] = -bid, adj[otherTeam(team)] = ds[otherTeam(team)];
       else if (ds[team] < bid) adj = [0, 0], adj[team] = -bid, adj[otherTeam(team)] = ds[otherTeam(team)];
       else adj = ds;
-      total += utility(adj, gameScore, team);
+      total += utility(adj, gameScore, team, team);
     }
     values[bid] = total / bestScores.length;
   }
@@ -314,7 +318,7 @@ export function chooseBid(infoSet, rng, numWorlds = 64) {
   let passTotal = 0;
   if (auction.HighBidder !== null) {
     const b = auction.HighBidder, hb = auction.HighBid;
-    for (const hands of worlds) passTotal += utility(simulateContract(dealer, hands, b, hb), gameScore, team);
+    for (const hands of worlds) passTotal += utility(simulateContract(dealer, hands, b, hb), gameScore, team, teamOfSeat(b));
     // a real bidder holds a better hand than a random one
     passTotal += worlds.length * (teamOfSeat(b) === team ? 0.6 : -0.6);
   } else if (seat === dealer) {
@@ -322,7 +326,7 @@ export function chooseBid(infoSet, rng, numWorlds = 64) {
   } else {
     // assume the next player bids two
     const nxt = seatIncr(1, seat);
-    for (const hands of worlds) passTotal += utility(simulateContract(dealer, hands, nxt, Bid.Two), gameScore, team);
+    for (const hands of worlds) passTotal += utility(simulateContract(dealer, hands, nxt, Bid.Two), gameScore, team, teamOfSeat(nxt));
     passTotal *= 0.7; // they might well pass too
   }
   values[Bid.Pass] = passTotal / worlds.length;
@@ -345,6 +349,7 @@ export function choosePlay(infoSet, rng, numWorlds = 64) {
   const legal = Playout.legalPlays(hand, p);
   if (legal.length === 1) return { card: legal[0], values: { [legal[0]]: 0 } };
   const team = teamOfSeat(seat);
+  const bidderTeam = teamOfSeat(p.Bidder);
 
   const worlds = [];
   for (let i = 0; i < numWorlds; i++) worlds.push(sampleHands(seat, hand, deal, rng));
@@ -356,7 +361,7 @@ export function choosePlay(infoSet, rng, numWorlds = 64) {
     for (const hands of worlds) {
       let d = { ClosedDeal: deal, Hands: hands };
       d = OpenDeal.addPlay(card, d);
-      total += utility(rolloutDeal(d), gameScore, team);
+      total += utility(rolloutDeal(d), gameScore, team, bidderTeam);
     }
     const v = total / worlds.length;
     values[card] = v;

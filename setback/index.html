@@ -13,22 +13,26 @@
 <meta name="apple-mobile-web-app-title" content="Setback">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%232f6b4f'/%3E%3Ctext x='32' y='46' font-size='40' text-anchor='middle' fill='%23f5f0e4'%3E%E2%99%A0%3C/text%3E%3C/svg%3E">
 <link rel="apple-touch-icon" href="icon.png">
-<link rel="stylesheet" href="setback.css?v=5">
+<link rel="stylesheet" href="setback.css?v=6">
+<script src="firebase-config.js?v=6"></script>
 </head>
 <body>
-<div id="app">
+
+<div id="screen" class="screen"></div>
+
+<div id="app" hidden>
 
   <header class="top">
     <div class="scores">
       <div class="score-team">
-        <span class="lbl">E+W</span>
-        <span class="pts" id="ewScore">0</span>
-        <span class="games" id="ewGames" title="Games won">0</span>
+        <span class="lbl" id="team0Lbl">E+W</span>
+        <span class="pts" id="team0Score">0</span>
+        <span class="side"><span class="games" id="team0Games">0</span><span class="sets" id="team0Sets">0</span></span>
       </div>
       <div class="score-team">
-        <span class="lbl">N+S</span>
-        <span class="pts" id="nsScore">0</span>
-        <span class="games" id="nsGames" title="Games won">0</span>
+        <span class="lbl" id="team1Lbl">N+S</span>
+        <span class="pts" id="team1Score">0</span>
+        <span class="side"><span class="games" id="team1Games">0</span><span class="sets" id="team1Sets">0</span></span>
       </div>
     </div>
     <div class="contract" id="contract"></div>
@@ -38,16 +42,16 @@
   <div class="status" id="status"></div>
 
   <main class="table" id="table">
-    <div class="seat seat-n" id="seat1"></div>
-    <div class="seat seat-w" id="seat0"></div>
-    <div class="seat seat-e" id="seat2"></div>
+    <div class="seat pos-top" id="seatPos1"></div>
+    <div class="seat pos-left" id="seatPos0"></div>
+    <div class="seat pos-right" id="seatPos2"></div>
     <div class="trick" id="trick">
-      <div class="slot slot-n" id="slot1"></div>
-      <div class="slot slot-w" id="slot0"></div>
-      <div class="slot slot-e" id="slot2"></div>
-      <div class="slot slot-s" id="slot3"></div>
+      <div class="slot slot-top" id="slotPos1"></div>
+      <div class="slot slot-left" id="slotPos0"></div>
+      <div class="slot slot-right" id="slotPos2"></div>
+      <div class="slot slot-bottom" id="slotPos3"></div>
     </div>
-    <div class="seat seat-s" id="seat3"></div>
+    <div class="seat pos-bottom" id="seatPos3"></div>
     <div class="bid-panel" id="bidPanel" hidden></div>
     <div class="toast" id="toast" hidden></div>
   </main>
@@ -57,12 +61,13 @@
     <div class="hand" id="hand"></div>
   </footer>
 
-  <div class="overlay" id="overlay" hidden>
-    <div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
-  </div>
-
 </div>
+
+<div class="overlay" id="overlay" hidden>
+  <div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
+</div>
+
 <noscript><p style="padding:1em;color:#fff">This game needs JavaScript.</p></noscript>
-<script type="module" src="app.js?v=5"></script>
+<script type="module" src="app.js?v=6"></script>
 </body>
 </html>
